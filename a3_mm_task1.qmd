@@ -1,0 +1,25 @@
+---
+useth---
+title: "a3_mm"
+format: html
+editor: visual
+---
+
+Task 1 - Palmetto binary logistic regression (individual)
+In a separate .qmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. 
+
+More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
+
+
+For this task, produce a final, professionally formatted knitted HTML that contains the following: 
+An overview section describing the data, the question(s) to be addressed in your analysis, and a citation of the dataset.
+A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species. If you prefer, combine the figures into a compound figure using patchwork or cowplot. Below your data visualizations, add a sentence or two with a takeaway from the plots, e.g., based on these plots, which predictor variables are more likely to help classify species correctly?
+A section in which you perform binary logistic regression to determine the probability of a plant being either Serenoa repens or Sabal etonia based on several predictor variables.  Perform the analysis twice, using cross validation to compare two models:
+Log odds of plant type using plant height, canopy length, canopy width and green leaves as predictor variables.
+Log odds of plant type using plant height, canopy width and green leaves (i.e., drop canopy length for this model).
+Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
+Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column,  or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis.  Your writeup should look and feel professional in style, tone, and substance.
+Optional: Consider including a photo or image that is relevant to your analysis.  Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header)
+All code, including attached packages, should be included using code-folding.  Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
