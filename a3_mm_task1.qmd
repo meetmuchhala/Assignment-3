@@ -10,15 +10,133 @@ In a separate .qmd, using the Florida palmetto data (palmetto.csv), use binary l
 
 More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
 
+## Initializing the libraries
 
-For this task, produce a final, professionally formatted knitted HTML that contains the following: 
-An overview section describing the data, the question(s) to be addressed in your analysis, and a citation of the dataset.
-A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species. If you prefer, combine the figures into a compound figure using patchwork or cowplot. Below your data visualizations, add a sentence or two with a takeaway from the plots, e.g., based on these plots, which predictor variables are more likely to help classify species correctly?
-A section in which you perform binary logistic regression to determine the probability of a plant being either Serenoa repens or Sabal etonia based on several predictor variables.  Perform the analysis twice, using cross validation to compare two models:
-Log odds of plant type using plant height, canopy length, canopy width and green leaves as predictor variables.
-Log odds of plant type using plant height, canopy width and green leaves (i.e., drop canopy length for this model).
+```{r}
+library(tidyverse) 
+library(here)
+library(tidymodels)
+library(rsample)
+
+```
+
+
+## Reading in the dataset
+
+```{r}
+
+palmetto_raw_df <- read_csv(here('data/palmetto.csv'))
+
+palmetto_df <- palmetto_raw_df %>% 
+  select(species, height, length, width, green_lvs) %>% 
+  ## selecting the required variables for analysis
+  mutate(species = factor(species))
+
+levels(palmetto_df$species) ## Species 1: Serenoa repens is level 0, Species 2: Sabal etonia is Level 1
+
+```
+
+## Exploratory Analysis 
+
+```{r}
+
+palmetto_df %>%
+  ggplot(aes(x = height, y = length, color = species)) +
+  geom_boxplot() +
+  labs(x = "Plant Height", y = "Canopy Length", color = "Species") +
+  theme_minimal()
+
+# Visualization 2: Canopy Width vs Number of Green Leaves
+palmetto_df %>%
+  ggplot(aes(x = width, y = green_lvs, color = species)) +
+  geom_point() +
+  labs(x = "Canopy Width", y = "Number of Green Leaves", color = "Species") +
+  theme_minimal()
+
+
+```
+
+
+## Testing first with basic logistic regression models
+
+```{r}
+f1 <- species ~ green_lvs + height + width + length
+f2 <- species ~ green_lvs + height + width
+
+blr1 <- glm(formula = f1, data = palmetto_df, family = binomial)
+summary(blr1)
+
+blr2 <- glm(formula = f2, data = palmetto_df, family = binomial)
+summary(blr2)
+
+
+```
+
+
+## Testing for proportions
+
+```{r}
+palmetto_df %>%
+  group_by(species) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  mutate(prop = n / sum(n))
+
+## The proportion of both the species in the dataset are almost equal at 50% each
+
+```
+
+## Splitting the species data for testing and training
+
+```{r}
+set.seed(35)
+
+species_split <- initial_split(palmetto_df, prop = 0.80, strata = NULL)
+species_train_df <- training(species_split)
+species_test_df <- testing(species_split)
+```
+
+## Setting up Binary Logistic Regression Models: TidyModels
+
+```{r}
+blr_mdl <- logistic_reg() %>%
+  set_engine('glm') ## GLM engine setup for the regression
+
+## Testing model 1 for fit
+model1_fit <- blr_mdl %>%
+  fit(formula = f1, data = species_train_df)
+
+## Testing the second model for fit
+model2_fit <- blr_mdl %>%
+  fit(formula = f2, data = species_train_df)
+
+model1_fit
+model2_fit
+```
+
+
+```{r}
+species_test_predict <- species_test_df %>%
+  mutate(predict(model1_fit, new_data = species_test_df)) %>%
+  mutate(predict(model1_fit, new_data = ., type = 'prob'))
+
+table(species_test_predict %>%
+        select(species, .pred_class))
+
+##        .pred_class
+##species    1    2
+    ##  1 1154   98
+     ## 2   83 1110
+
+accuracy(species_test_predict, truth = species, estimate = .pred_class)
+
+```
+
+
 Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
 Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+
+
 A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column,  or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
 Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis.  Your writeup should look and feel professional in style, tone, and substance.
 Optional: Consider including a photo or image that is relevant to your analysis.  Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header)
