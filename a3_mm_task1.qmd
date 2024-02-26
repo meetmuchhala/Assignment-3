@@ -116,26 +116,99 @@ model2_fit
 
 
 ```{r}
-species_test_predict <- species_test_df %>%
-  mutate(predict(model1_fit, new_data = species_test_df)) %>%
-  mutate(predict(model1_fit, new_data = ., type = 'prob'))
+species_test1_predict <- species_test_df %>%
+  mutate(predict(model1_fit, new_data = species_test_df, type = 'prob'))
 
-table(species_test_predict %>%
-        select(species, .pred_class))
+species_test2_predict <- species_test_df %>%
+  mutate(predict(model2_fit, new_data = species_test_df, type = 'prob'))
 
-##        .pred_class
-##species    1    2
-    ##  1 1154   98
-     ## 2   83 1110
 
-accuracy(species_test_predict, truth = species, estimate = .pred_class)
 
 ```
 
 
-Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
-Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions). 
 
+```{r}
+set.seed(1567)
+species_train_folds <- vfold_cv(species_train_df, v = 10, repeats = 10)
+species_train_folds
+```
+
+```{r}
+
+species_model1_wf <- workflow() %>%   
+  add_model(blr_mdl) %>%
+  add_formula(species ~ green_lvs + height + width + length)
+  
+
+species_model2_wf <- workflow() %>%   
+  add_model(blr_mdl) %>%
+  add_formula(species ~ green_lvs + height + width)
+
+```
+## Model 1 performs better 
+Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
+
+
+```{r}
+model1_fit_folds <- species_model1_wf %>%
+  fit_resamples(species_train_folds)
+
+model2_fit_folds <- species_model2_wf %>%
+  fit_resamples(species_train_folds)
+
+model1_fit_folds
+model2_fit_folds
+
+### Average the predictive performance of the ten models:
+collect_metrics(model1_fit_folds)
+collect_metrics(model2_fit_folds)
+```
+
+
+
+```{r}
+## Pending: Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+
+```
+
+
+```{r}
+## since model 1 performs better let's classify the predictions
+
+finalmodel_predictions <- species_test1_predict %>% 
+  mutate(predicted_species = ifelse(.pred_1 >= .50, levels(palmetto_df$species)[1], levels(palmetto_df$species)[2]))
+
+table(finalmodel_predictions %>% 
+        select(species, predicted_species))
+
+
+
+```
+
+
+```{r}
+library(kableExtra)
+
+# Calculate percentage of correctly classified observations
+correct_percentage <- diag(conf_matrix) / rowSums(conf_matrix) * 100
+
+# Add percentage column to the confusion matrix table
+conf_matrix_with_percentage <- cbind(conf_matrix, Correct_Percentage = correct_percentage)
+
+# Convert confusion matrix to data frame
+conf_df <- as.data.frame(conf_matrix_with_percentage)
+
+# Add row names and column names
+rownames(conf_df) <- rownames(conf_matrix_with_percentage)
+colnames(conf_df) <- c("Serenoa repens", "Sabal etonia", "% Correctly Classified")
+
+# Print confusion matrix table with percentage using kableExtra
+kable(conf_df, "html") %>%
+  kable_styling()
+
+```
 
 A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column,  or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
 Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis.  Your writeup should look and feel professional in style, tone, and substance.
