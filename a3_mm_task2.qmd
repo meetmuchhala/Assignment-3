@@ -1,0 +1,237 @@
+---
+title: "a3_mm"
+format: html
+editor: visual
+---
+
+Farmers need to understand the biology of plants and their responses to fertilizers to maximize yield. You will help farmers make predictions on their yields by running non-linear least squares on experimental growth data for three grains in Greece. Additionally, you will assess the response of the grains to fertlizer. You will recreate the model examples of Archontoulis, S.V. and Miguez, F.E. (2015).
+
+The data used by them and soon by you can accessed by installing the nlraa package and then using library(nlraa). The data is stored in an object called sm.
+
+## Setting up the libraries
+
+```{r}
+library(tidyverse)
+library(Metrics)
+library(cowplot)
+library(here)
+library(nlraa)
+library(purrr)
+library(kableExtra)
+library(broom)
+
+```
+
+## Setting up the datasets
+
+```{r}
+
+## Checking the data and structure of the data
+crop_df <- sm %>% 
+  janitor::clean_names() 
+  
+str(crop_df)
+
+## Visualizing biomass over time detect guess parameters
+
+ggplot(crop_df, aes(x = doy, y = yield, 
+                    shape = crop, fill = crop)) +
+  geom_point(size = 1) + 
+  labs(x = "Day of the Year", y = "Biomass (Mg/ha)", 
+       title = "Biomass Over Time") +
+  facet_wrap(~ input, scales = "free_x", ncol = 2) +
+  scale_shape_manual(values = c("F" = 24, 
+                                "M" = 21, "S" = 21)) +
+  scale_fill_manual(values = c("F" = "white", 
+                               "M" = "black", "S" = "white")) +
+  guides(shape = guide_legend(title = "Crop", 
+        override.aes = list(fill = c("white", "black", "white"))),
+         fill = FALSE)
+
+
+```
+
+## Model selection
+
+We choose the Beta function from Table 1 Equation 2.5 of Archontoulis and Miguez (2015) as our model for NLS regression. The function is given as:
+
+ymax1 + t \* exp(-t) \* (t / tm)\^te \* exp(-t / tm)
+
+-   ymax1 represents the maximum yield,
+-   t represents time (day of the year),
+-   te represents the time to inflection,
+-   tm represents the time to reach half of the maximum value.
+
+Write a function in R to model the Beta Function. Create a plot similar to Fig. 4 (biomass over time) and use the definitions of the different parameters to find some potential starting parameter values for your nls analysis.
+
+```{r}
+
+## Setting up the Beta Function for the model
+beta_function <- function(t, ymax, te, tm) {
+  y_out <- ymax*(1+(te-t)/(te-tm))*(t/te)^(te/(te-tm))
+  return(y_out)
+}
+
+## Testing initial simulation values based on literature and plotting visualizations
+
+beta_simulation <- crop_df %>% 
+  mutate(simulated = beta_function(doy, 52, 262, 219))
+
+simulated_mod_plot <- ggplot(beta_simulation, aes(x = doy, y = yield, color = "actual")) +
+  geom_point() +
+  geom_line(aes(x = doy, y = simulated, color = "simulated model")) +
+  scale_color_manual(values = c("actual" = "darkblue", "simulated model" = "yellow2")) +
+  theme_minimal()
+                        
+simulated_mod_plot
+```
+
+## Pre NLS Modelling Setup
+
+```{r}
+
+## Filtering to keep observations from sorghum fields with higher inputs.
+sorghum_df <- crop_df %>% 
+  filter(crop == "S" & input == "2")
+
+## Setting up initial guesses
+
+ymax_guess <- max(crop_df$yield)
+te_guess <- 264
+tm_guess <- 219
+
+
+```
+
+## First NLS Model
+
+Filter to keep observations from the sorghum fields with high inputs and run an NLS model to predict yield for any given day of the year.
+
+```{r}
+nls_sorghum_one = nls(yield ~ beta_function(doy,
+                                            ymax,
+                                            te,
+                                            tm),
+                  data = sorghum_df,
+                  start = list(ymax = ymax_guess,
+                               te = te_guess,
+                               tm = tm_guess),
+                  trace=TRUE)
+```
+
+Make a good looking table showing the selected parameter values, standard errors, and p-values of the estimated parameters.
+
+```{r}
+
+#| tbl-cap: "Parameter value estimates, standard errors, t-values and p-values for the NLS model fitted to high-input sweet sorghum biomass data.
+
+kbl(coef(summary(nls_sorghum_one)))
+```
+
+ Graph the fitted model on top of the maize data.
+ 
+ 
+```{r}
+
+maize_df <- crop_df %>% 
+  filter(crop == "M") %>% 
+  mutate(input = factor(input))
+
+nls_one_predict<- maize_df %>% 
+  mutate(predict = predict(nls_sorghum_one,newdata=.)) 
+  
+
+## The model seems to be predicting with lesser error for other two crops but not for maize.
+
+##ggplot() +
+##  geom_point(data = crop_df, aes(x = doy,y = yield, color = crop)) +
+ # geom_path(data = nls_one_predict, aes(x= doy,y=predict),color='red')
+
+ggplot() +
+ geom_point(data = maize_df, aes(x = doy,y = yield, color = input)) +
+ geom_path(data = nls_one_predict, aes(x= doy,y=predict),color='black') +
+  scale_color_manual(values = c("green4", "tomato3")) +
+  labs(x = "Day of the Year", y = "Biomass (mg/ha)", title = "NLS Model 1: Maize Yields - Actual Data vs Predicted Curve") +
+  theme_light()
+
+```
+ 
+ There is an absolute reasoning for running separate NLS models considering it does not fit into all crops. 
+ 
+```{r}
+## Defining function to pass all the NLS model calls
+
+all_beta_function <- function(yields_df){
+  
+  ymax_guess <- max(yields_df$yield)
+  te_guess <- 286
+  tm_guess <- 247
+  
+  nls(
+    formula = yield ~ beta_function(doy, ymax, te, tm),
+  data = yields_df,
+  start = list(ymax = ymax_guess,
+               te = te_guess,
+               tm = tm_guess))
+}
+
+
+
+
+beta_all <- crop_df %>%
+  group_by(block, input, crop) %>% 
+  nest() %>% 
+  mutate(nls_model = map(data, ~ all_beta_function(.x)),
+  predictions = map2(nls_model, data, ~predict(.x, newdata = .y)),
+  smooth = map(nls_model, ~predict(.x, newdata = list(doy=seq(141,303)))),
+  rmse = map2_dbl(predictions, data, ~Metrics::rmse(.x, .y$yield)))
+```
+ 
+## Pick the best model
+
+```{r}
+rmse_least <- beta_all %>% 
+  group_by(crop) %>% 
+  slice_min(order_by = rmse)
+```
+
+```{r}
+
+# F
+tidy(rmse_least$nls_model[[1]]) %>% 
+kbl()
+# M
+tidy(rmse_least$nls_model[[2]]) %>% 
+kbl()
+# S
+tidy(rmse_least$nls_model[[3]]) %>% 
+kbl()
+```
+
+
+## Final plot
+
+
+```{r}
+
+observed_data <- crop_df %>%
+  filter(block == 1)
+ 
+
+model_smooth_pred <- beta_all %>% 
+  filter(block == 1) %>% 
+  unnest(cols = c(smooth)) %>% 
+  select(crop, smooth) %>% 
+  mutate(doy_smooth = seq(141, 303)) %>% # add doy for smoothed outputs
+  filter(!(crop == "M" & doy_smooth > 263)) # maize data not collected after day 263
+
+ggplot() +
+  geom_point(data = observed_data, aes(x = doy, y = yield, color = crop)) +  # Observed data points
+  geom_path(data = model_smooth_pred, aes(x = doy_smooth, y = smooth, color = crop), size = 1) +  # Smoothed model predictions
+  scale_color_manual(values = c("F" = "gold3", "M" = "tomato4", "S" = "blue4")) + 
+  facet_wrap(~input) +# Color mapping for different crops
+  labs(x = "Day of Year", y = "Biomass", title = "Observed Data vs Smoothed Model Predictions") +
+  theme_minimal()
+```
+
+In your final report include the code, but NOT the plot you used to feed guesses.  Run NLS models for all 24 combinations of plot, input level, and crop type using purrr. For each species, which model had the lowest RMSE? Show a table of the RMSE and chosen parameter values of the best fitted models for each species. Finally, filter to plot 1 and recreate Figure 7 of the paper. Don’t worry about adding confidence intervals on the data points. How does more fertilizer impact yield for all three grains? Hints: I would separate dataframes one of the filtered data and another of the model predictions with a vector of days from 141 to 306. Then create two figures for each input and join them with patchwork or cowplot. Filter observations of predicted yield for maize when day of year is less than 263. Otherwise your graph is going to look weird. Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis. Your writeup should look and feel professional in style, tone, and substance. Optional: Consider including a photo or image that is relevant to your analysis. Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header) All code, including attached packages, should be included using code-folding. Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
