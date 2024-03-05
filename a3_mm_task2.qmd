@@ -1,12 +1,87 @@
 ---
-title: "a3_mm"
-format: html
+title: "Assignment - 3: Task 2"
+author: "Meet Muchhala"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    embed-resources: true
 editor: visual
+theme: sandstone
+execute: 
+  echo: true
+  message: false
+  warning: false
 ---
 
-Farmers need to understand the biology of plants and their responses to fertilizers to maximize yield. You will help farmers make predictions on their yields by running non-linear least squares on experimental growth data for three grains in Greece. Additionally, you will assess the response of the grains to fertlizer. You will recreate the model examples of Archontoulis, S.V. and Miguez, F.E. (2015).
+# NLS Modelling for Crop Biomass Data
 
-The data used by them and soon by you can accessed by installing the nlraa package and then using library(nlraa). The data is stored in an object called sm.
+![](/Users/meetmuchhala/Desktop/Winter%202024/ESM%20244/Assignment-3/image.png) Source: Texas A & M
+
+## Overview
+
+### Dataset Description:
+
+The dataset used in this analysis contains experimental growth data for three grains (sorghum, maize, and millet) in Greece. It is sourced from the study by Archontoulis, S.V. and Miguez, F.E. (2015) and is accessible through the nlraa package in R.
+
+### Purpose of Analysis:
+
+The goal of this analysis is to use non-linear least squares (NLS) regression to predict crop yields based on experimental growth data and assess the response of the grains to fertilizer. We will choose the Beta function from Table 1 Equation 2.5 of Archontoulis and Miguez (2015) as our model for NLS regression.The dataset consists of experimental growth data for three grains (sorghum, maize, and millet) in Greece. The variables included are as follows:
+
+<details>
+
+<summary>Show Table</summary>
+
+```{r}
+
+#|echo = FALSE
+
+dataset_description <- tibble::tribble(
+  ~Variable, ~Description,
+  "doy", "Day of the year",
+  "block", "Experimental block number",
+  "input", "Fertilizer input level (1 = low, 2 = high)",
+  "crop", "Type of crop (F = Faba bean, M = Maize, S = Sorghum)",
+  "yield", "Biomass yield (Mg/ha)"
+)
+
+# Load required package
+library(knitr)
+
+# Create a formatted table
+kable(dataset_description, caption = "Description of Dataset Variables")
+```
+
+</details>
+
+The data is sourced from Archontoulis, S.V. and Miguez, F.E. (2015) and is accessible via the nlraa package.
+
+## Pseudocode Outline
+
+### Data Preparation
+
+-   Load and clean the dataset
+-   Visualize biomass over time to identify potential starting parameter values for NLS analysis
+
+### Model Selection
+
+-   Choose the Beta function from Table 1 Equation 2.5 of the paper cited as our NLS model
+-   Write a function in R to model the Beta function
+-   Create a plot to find potential starting parameter values for NLS analysis NLS Modeling
+-   Filter data to keep observations from sorghum fields with high inputs - Run an initial NLS model to predict yield for each day of the year
+-   Generate a table showing selected parameter values, standard errors, and p-values of estimated parameters - Graph the fitted model on top of the maize data
+
+### Model Comparison
+
+-   Run NLS models for all combinations of plot, input level, and crop type using purrr
+-   Identify the model with the lowest RMSE for each species
+-   Show a table of RMSE and chosen parameter values for the best fitted models
+
+### Final Visualization
+
+-   Filter data to block 1 for simplicity and create a plot of actual yield vs modelled yield.
+-   Create figures for each input level and join them using patchwork or cowplot
+-   Analyze the impact of fertilizer on yield for all three grains
 
 ## Setting up the libraries
 
@@ -26,15 +101,20 @@ library(broom)
 
 ```{r}
 
+#|echo=FALSE 
+#|message=FALSE 
+
 ## Checking the data and structure of the data
 crop_df <- sm %>% 
   janitor::clean_names() 
   
-str(crop_df)
+#str(crop_df)
 
+#|echo=FALSE
+#|include=FALSE
 ## Visualizing biomass over time detect guess parameters
 
-ggplot(crop_df, aes(x = doy, y = yield, 
+plot1 <- ggplot(crop_df, aes(x = doy, y = yield, 
                     shape = crop, fill = crop)) +
   geom_point(size = 1) + 
   labs(x = "Day of the Year", y = "Biomass (Mg/ha)", 
@@ -48,23 +128,23 @@ ggplot(crop_df, aes(x = doy, y = yield,
         override.aes = list(fill = c("white", "black", "white"))),
          fill = FALSE)
 
-
 ```
 
 ## Model selection
 
 We choose the Beta function from Table 1 Equation 2.5 of Archontoulis and Miguez (2015) as our model for NLS regression. The function is given as:
 
-ymax1 + t \* exp(-t) \* (t / tm)\^te \* exp(-t / tm)
+y = ymax*(1+(te-t)/(te-tm))*(t/te)\^(te/(te-tm))
 
--   ymax1 represents the maximum yield,
+-   ymax represents the maximum yield,
 -   t represents time (day of the year),
 -   te represents the time to inflection,
 -   tm represents the time to reach half of the maximum value.
 
-Write a function in R to model the Beta Function. Create a plot similar to Fig. 4 (biomass over time) and use the definitions of the different parameters to find some potential starting parameter values for your nls analysis.
-
 ```{r}
+
+#|echo=FALSE
+#|message=FALSE 
 
 ## Setting up the Beta Function for the model
 beta_function <- function(t, ymax, te, tm) {
@@ -72,6 +152,8 @@ beta_function <- function(t, ymax, te, tm) {
   return(y_out)
 }
 
+#|echo=FALSE
+#|include=FALSE
 ## Testing initial simulation values based on literature and plotting visualizations
 
 beta_simulation <- crop_df %>% 
@@ -83,10 +165,11 @@ simulated_mod_plot <- ggplot(beta_simulation, aes(x = doy, y = yield, color = "a
   scale_color_manual(values = c("actual" = "darkblue", "simulated model" = "yellow2")) +
   theme_minimal()
                         
-simulated_mod_plot
 ```
 
-## Pre NLS Modelling Setup
+## NLS Modelling Setup and Filtering
+
+We filter the data to keep observations from sorghum fields with high inputs and run an NLS model to predict yield for each day of the year.
 
 ```{r}
 
@@ -94,7 +177,7 @@ simulated_mod_plot
 sorghum_df <- crop_df %>% 
   filter(crop == "S" & input == "2")
 
-## Setting up initial guesses
+## Setting up initial guesses based on simulated plot assumptions.
 
 ymax_guess <- max(crop_df$yield)
 te_guess <- 264
@@ -103,11 +186,9 @@ tm_guess <- 219
 
 ```
 
-## First NLS Model
-
-Filter to keep observations from the sorghum fields with high inputs and run an NLS model to predict yield for any given day of the year.
-
 ```{r}
+
+#|message = FALSE
 nls_sorghum_one = nls(yield ~ beta_function(doy,
                                             ymax,
                                             te,
@@ -116,22 +197,26 @@ nls_sorghum_one = nls(yield ~ beta_function(doy,
                   start = list(ymax = ymax_guess,
                                te = te_guess,
                                tm = tm_guess),
-                  trace=TRUE)
+                  trace=FALSE)
 ```
 
-Make a good looking table showing the selected parameter values, standard errors, and p-values of the estimated parameters.
+## Output Parameters of NLS Model
+
+A table showing selected parameter values, standard errors, and p-values of estimated parameters is generated, and the fitted model is graphed on top of the maize data.
 
 ```{r}
+#| fig-cap: "Table 1: Parameter value estimates, standard errors, t-values and p-values for the NLS model fitted to high-input sweet sorghum biomass data."
 
-#| tbl-cap: "Parameter value estimates, standard errors, t-values and p-values for the NLS model fitted to high-input sweet sorghum biomass data.
-
-kbl(coef(summary(nls_sorghum_one)))
+kbl(coef(summary(nls_sorghum_one))) 
 ```
 
- Graph the fitted model on top of the maize data.
- 
- 
+## Fitted Model Maize Crops
+
+The fitted model was graphed all the crops data and further detected that it does not predict maize crops data well. The fitted model on maize data is represented below.
+
 ```{r}
+#| label: fig-fittedmodel
+#| fig-cap: "NLS model outputs from the Beta function, graphed on top of Maize crop biomass observations."
 
 maize_df <- crop_df %>% 
   filter(crop == "M") %>% 
@@ -155,9 +240,13 @@ ggplot() +
   theme_light()
 
 ```
- 
- There is an absolute reasoning for running separate NLS models considering it does not fit into all crops. 
- 
+
+There is an absolute reasoning for running separate NLS models considering it does not fit and represent the data of all crops.
+
+## NLS Modelling
+
+Using purrr, we run NLS models for all 24 combinations of plot, input level, and crop type. For each species, we identify the model with the lowest Root Mean Squared Error (RMSE) and present a table of the RMSE and chosen parameter values of the best-fitted models for each species.
+
 ```{r}
 ## Defining function to pass all the NLS model calls
 
@@ -185,34 +274,43 @@ beta_all <- crop_df %>%
   predictions = map2(nls_model, data, ~predict(.x, newdata = .y)),
   smooth = map(nls_model, ~predict(.x, newdata = list(doy=seq(141,303)))),
   rmse = map2_dbl(predictions, data, ~Metrics::rmse(.x, .y$yield)))
-```
- 
-## Pick the best model
 
-```{r}
+
+## Picking the best model 
 rmse_least <- beta_all %>% 
   group_by(crop) %>% 
   slice_min(order_by = rmse)
+
 ```
 
+
 ```{r}
+#| label: tbl-rmse
+#| tbl-cap: "Parameter value estimates, standard errors, t-values and p-values for the NLS model with the least RMSE value for each crop species."
+#| tbl-subcap: 
+#|   - "Fiber Sorghum"
+#|   - "Maize"
+#|   - "Sweet Sorghum"
+#| layout-nrow: 3
 
 # F
-tidy(rmse_least$nls_model[[1]]) %>% 
-kbl()
+broom::tidy(rmse_least$nls_model[[1]]) %>% 
+  kbl()
 # M
-tidy(rmse_least$nls_model[[2]]) %>% 
-kbl()
+broom::tidy(rmse_least$nls_model[[2]]) %>% 
+  kbl()
 # S
-tidy(rmse_least$nls_model[[3]]) %>% 
-kbl()
+broom::tidy(rmse_least$nls_model[[3]]) %>% 
+  kbl()
 ```
 
+## Model Impact Visualization
 
-## Final plot
-
+We filter the data to block 1 and create a visualization which illustrates the impact of fertilizer on yield for all three grains. The filtering is done for simplification of the visualization
 
 ```{r}
+#| label: fig-last
+#| fig-cap: "Observed crop biomass compared to smoothed model predictions for each crop species and input level for block 1. Colors represent different crop species. Left(1) graph represents low fertilizer input and Right(2) graph represents high fertilizer input."
 
 observed_data <- crop_df %>%
   filter(block == 1)
@@ -222,8 +320,8 @@ model_smooth_pred <- beta_all %>%
   filter(block == 1) %>% 
   unnest(cols = c(smooth)) %>% 
   select(crop, smooth) %>% 
-  mutate(doy_smooth = seq(141, 303)) %>% # add doy for smoothed outputs
-  filter(!(crop == "M" & doy_smooth > 263)) # maize data not collected after day 263
+  mutate(doy_smooth = seq(141, 303)) %>% 
+  filter(!(crop == "M" & doy_smooth > 263)) 
 
 ggplot() +
   geom_point(data = observed_data, aes(x = doy, y = yield, color = crop)) +  # Observed data points
@@ -234,4 +332,6 @@ ggplot() +
   theme_minimal()
 ```
 
-In your final report include the code, but NOT the plot you used to feed guesses.  Run NLS models for all 24 combinations of plot, input level, and crop type using purrr. For each species, which model had the lowest RMSE? Show a table of the RMSE and chosen parameter values of the best fitted models for each species. Finally, filter to plot 1 and recreate Figure 7 of the paper. Don’t worry about adding confidence intervals on the data points. How does more fertilizer impact yield for all three grains? Hints: I would separate dataframes one of the filtered data and another of the model predictions with a vector of days from 141 to 306. Then create two figures for each input and join them with patchwork or cowplot. Filter observations of predicted yield for maize when day of year is less than 263. Otherwise your graph is going to look weird. Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis. Your writeup should look and feel professional in style, tone, and substance. Optional: Consider including a photo or image that is relevant to your analysis. Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header) All code, including attached packages, should be included using code-folding. Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
+## Conclusion
+
+Based on the observed data and smoothed model predictions, it is evident that high fertilizer inputs generally lead to higher yields compared to low fertilizer inputs. However, there does not appear to be a substantial difference in yields between fertilizer inputs in the earlier stages of the growth period. This suggests that while high fertilizer inputs may promote greater biomass accumulation overall, the impact may not be significant during the initial phases of plant growth. Further analysis and experimentation may be required to fully understand the dynamics of fertilizer response and its influence on crop yields over time.

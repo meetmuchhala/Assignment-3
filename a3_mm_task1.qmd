@@ -5,8 +5,7 @@ format: html
 editor: visual
 ---
 
-Task 1 - Palmetto binary logistic regression (individual)
-In a separate .qmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. 
+Task 1 - Palmetto binary logistic regression (individual) In a separate .qmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia.
 
 More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
 
@@ -19,7 +18,6 @@ library(tidymodels)
 library(rsample)
 
 ```
-
 
 ## Reading in the dataset
 
@@ -36,7 +34,7 @@ levels(palmetto_df$species) ## Species 1: Serenoa repens is level 0, Species 2: 
 
 ```
 
-## Exploratory Analysis 
+## Exploratory Analysis
 
 ```{r}
 
@@ -56,7 +54,6 @@ palmetto_df %>%
 
 ```
 
-
 ## Testing first with basic logistic regression models
 
 ```{r}
@@ -71,7 +68,6 @@ summary(blr2)
 
 
 ```
-
 
 ## Testing for proportions
 
@@ -114,7 +110,6 @@ model1_fit
 model2_fit
 ```
 
-
 ```{r}
 species_test1_predict <- species_test_df %>%
   mutate(predict(model1_fit, new_data = species_test_df, type = 'prob'))
@@ -126,8 +121,7 @@ species_test2_predict <- species_test_df %>%
 
 ```
 
-
-Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions). 
+Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check. Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions).
 
 ```{r}
 set.seed(1567)
@@ -147,9 +141,10 @@ species_model2_wf <- workflow() %>%
   add_formula(species ~ green_lvs + height + width)
 
 ```
-## Model 1 performs better 
-Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
 
+## Model 1 performs better
+
+Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
 
 ```{r}
 model1_fit_folds <- species_model1_wf %>%
@@ -166,13 +161,10 @@ collect_metrics(model1_fit_folds)
 collect_metrics(model2_fit_folds)
 ```
 
-
-
 ```{r}
 ## Pending: Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
 
 ```
-
 
 ```{r}
 ## since model 1 performs better let's classify the predictions
@@ -187,9 +179,10 @@ table(finalmodel_predictions %>%
 
 ```
 
-
 ```{r}
 library(kableExtra)
+
+conf_matrix <- table(finalmodel_predictions$species, finalmodel_predictions$predicted_species)
 
 # Calculate percentage of correctly classified observations
 correct_percentage <- diag(conf_matrix) / rowSums(conf_matrix) * 100
@@ -210,7 +203,40 @@ kable(conf_df, "html") %>%
 
 ```
 
-A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column,  or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
-Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis.  Your writeup should look and feel professional in style, tone, and substance.
-Optional: Consider including a photo or image that is relevant to your analysis.  Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header)
-All code, including attached packages, should be included using code-folding.  Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
+
+```{r}
+library(kableExtra)
+library(broom)
+
+# Get predicted values from the model
+finalmodel_predictions <- augment(final_model, newdata = species_test_df)
+
+# Calculate correct percentages
+correct_percentage <- mean(finalmodel_predictions$species == finalmodel_predictions$.fitted) * 100
+
+# Create a table with percentages using kableExtra
+table_with_percentage <- finalmodel_predictions %>%
+  select(species, .fitted) %>%
+  mutate(Correctly_Classified = ifelse(.fitted >= 0.5, "Sabal etonia", "Serenoa repens")) %>%
+  group_by(species, Correctly_Classified) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = paste(round(Count / sum(Count) * 100, 2), "%")) %>%
+  pivot_wider(names_from = Correctly_Classified, values_from = Count) %>%
+  mutate(`% Correctly Classified` = paste0(round(correct_percentage, 2), "%")) %>%
+  select(-species)
+
+# Print confusion matrix table with percentage using kableExtra
+table_with_percentage %>%
+  kable("html") %>%
+  kable_styling()
+
+# Plot confusion matrix
+ggplot(finalmodel_predictions, aes(x = species, y = .fitted, fill = .fitted)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.2f%%", .fitted * 100)), vjust = 1) +
+  labs(x = "Actual Species", y = "Predicted Probability", fill = "Probability") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is \>=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column, or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after. Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis. Your writeup should look and feel professional in style, tone, and substance. Optional: Consider including a photo or image that is relevant to your analysis. Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header) All code, including attached packages, should be included using code-folding. Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
