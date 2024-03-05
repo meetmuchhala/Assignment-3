@@ -1,13 +1,55 @@
 ---
-useth---
-title: "a3_mm"
-format: html
+title: "Assignment 3 - Task 1"
+author: "Meet Muchhala"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    embed-resources: true
 editor: visual
+theme: pulse
+execute: 
+  echo: true
+  message: false
+  warning: false
 ---
 
-Task 1 - Palmetto binary logistic regression (individual) In a separate .qmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia.
+# Prediction Power with Binary Logistic Regression: Palmetto Species
 
-More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
+## Introduction
+This dataset provides insights into the survival and growth patterns of two distinct species of palmetto, namely Serenoa repens and Sabal etonia, within the premises of the Archbold Biological Station situated in Florida. Both species belong to the category of fan palms and have been subject to meticulous scientific observation. The researchers involved in this study meticulously recorded various attributes pertaining to the growth of these plants, including plant height, canopy dimensions (length and width), number of green leaves, among others. Data collection spanned multiple years, commencing from 1981 and continuing until 1997, with additional data points gathered in 2001 and 2017. The data contains following variables:
+
+- `species`: The species of the palmetto plant, with two levels representing Serenoa repens and Sabal etonia.
+- `height`: Plant height in centimeters.
+- `length`: Canopy length in centimeters.
+- `width`: Canopy width in centimeters.
+- `green_lvs`: Number of green leaves on the plant.
+
+**Data source:** Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. <https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5>
+
+## Objectives
+
+The primary objective of this analysis is to ascertain the efficacy of utilizing measurements such as plant height, canopy dimensions, and green leaf count as determinants for classifying unknown specimens into either S. repens or S. etonia. To achieve this, binary logistic regression was employed to construct a classification model capable of distinguishing between the two species based on these measured attributes.
+
+## Approach
+
+### Data Initialization
+To begin the analysis, we initialize the necessary libraries, including tidyverse, tidymodels, and rsample. These libraries provide tools for data manipulation, visualization, and modeling. Next, we read in the dataset containing survival, growth, and biomass estimates of two dominant palmetto species in south-central Florida from 1981 to 2017. The dataset includes variables such as species, plant height, canopy length, canopy width, and number of green leaves.
+
+### Exploratory Analysis
+Once the dataset is loaded, we conduct exploratory data analysis to gain insights into the distribution and characteristics of the variables. We create visualizations to compare the differences in plant height, canopy length, canopy width, and number of green leaves between the two palmetto species. These visualizations help us understand which variables may be informative for classifying the species.
+
+### Binary Logistic Regression
+Following the exploratory analysis, we perform binary logistic regression to model the probability of a palmetto plant belonging to either species Serenoa repens or Sabal etonia. We create two logistic regression models: one using all predictor variables (plant height, canopy length, canopy width, and number of green leaves), and another model excluding canopy length.
+
+### Cross Validation Performance Model
+To evaluate the performance of the models, we use repeated cross-validation with ten-fold cross-validation repeated at least ten times. This allows us to assess the models' generalization performance and compare their accuracy, area under the ROC curve, and other metrics. Based on the cross-validation results, we select the better performing model for further analysis.
+
+### Training the best performing model
+Once the better performing model is identified, we train it on the entire dataset to obtain the final model parameters. We then use the trained model to classify the palmetto plants in the dataset and evaluate its classification performance. We assess the model's ability to correctly classify plants into their respective species using a 50% cutoff for probability.
+
+### Conclusion and Results
+Finally, we summarize the analysis findings and conclusions in a professionally formatted report, including data visualizations, model performance metrics, and a discussion of the classification results. The report aims to provide insights into the feasibility of using plant characteristics for species classification in the context of palmetto plants in south-central Florida.
 
 ## Initializing the libraries
 
@@ -16,6 +58,8 @@ library(tidyverse)
 library(here)
 library(tidymodels)
 library(rsample)
+library(kableExtra)
+library(cowplot)
 
 ```
 
@@ -30,7 +74,7 @@ palmetto_df <- palmetto_raw_df %>%
   ## selecting the required variables for analysis
   mutate(species = factor(species))
 
-levels(palmetto_df$species) ## Species 1: Serenoa repens is level 0, Species 2: Sabal etonia is Level 1
+##levels(palmetto_df$species) ## Species 1: Serenoa repens is level 0, Species 2: Sabal etonia is Level 1
 
 ```
 
@@ -38,148 +82,198 @@ levels(palmetto_df$species) ## Species 1: Serenoa repens is level 0, Species 2: 
 
 ```{r}
 
-palmetto_df %>%
+ex_plot1 <- palmetto_df %>%
   ggplot(aes(x = height, y = length, color = species)) +
-  geom_boxplot() +
-  labs(x = "Plant Height", y = "Canopy Length", color = "Species") +
+  geom_point() +
+  scale_color_manual(values = c("1" = "darkgreen", "2" = "yellow2"),
+                     labels = c("Serenoa repens", "Sabal etonia")) +
+  labs(x = "Plant Height (cm)", y = "Canopy Length(cm)", color = "Species") +
   theme_minimal()
 
 # Visualization 2: Canopy Width vs Number of Green Leaves
-palmetto_df %>%
+ex_plot2 <- palmetto_df %>%
   ggplot(aes(x = width, y = green_lvs, color = species)) +
   geom_point() +
+  scale_color_manual(values = c("1" = "darkgreen", "2" = "yellow2"),
+                     labels = c("Serenoa repens", "Sabal etonia")) +
+  labs(x = "Canopy Width", y = "Number of Green Leaves", color = "Species") +
+  theme_minimal()
+
+
+# Visualization 3: Height vs Number of green leaves
+  
+ ex_plot3 <- palmetto_df %>%
+  ggplot(aes(x = height, y = green_lvs, color = species)) +
+  geom_point() +
+  scale_color_manual(values = c("1" = "darkgreen", "2" = "yellow2"),
+                     labels = c("Serenoa repens", "Sabal etonia")) +
+  labs(x = "Canopy Width", y = "Number of Green Leaves", color = "Species") +
+  theme_minimal()
+  
+  # Visualization 4: Length vs Number of green leaves
+  
+ex_plot4 <-  palmetto_df %>%
+  ggplot(aes(x = length, y = green_lvs, color = species)) +
+  geom_point() +
+  scale_color_manual(values = c("1" = "darkgreen", "2" = "yellow2"),
+                     labels = c("Serenoa repens", "Sabal etonia")) +
   labs(x = "Canopy Width", y = "Number of Green Leaves", color = "Species") +
   theme_minimal()
 
 
 ```
 
-## Testing first with basic logistic regression models
+```{r}
+#| label: fig-plots
+#| fig-cap: "Plots exploring measuring dimensions and intersection with green leaves  *S. repens* and *S. etonia.*"
 
+
+plot_grid(ex_plot1, ex_plot2, ex_plot3, ex_plot4,
+          labels = c("1", "2", "3", "4"),
+          ncol = 2,
+          vjust = 1)
+
+```
+
+### Takeaways:
+
+We observe in the visualizations that 'green_lvs' is the evident varying parameters when compared to all the other variables. When visualized alongside each of the measuring dimension such as 'length', 'height' and 'width', 'green_lvs' is evidently varying. It is important that take all these variables into account in one of the models. 
+
+## Binary Logistic Regression: Cross Validation
+
+### Formulas 
 ```{r}
 f1 <- species ~ green_lvs + height + width + length
 f2 <- species ~ green_lvs + height + width
 
-blr1 <- glm(formula = f1, data = palmetto_df, family = binomial)
-summary(blr1)
-
-blr2 <- glm(formula = f2, data = palmetto_df, family = binomial)
-summary(blr2)
-
-
 ```
 
-## Testing for proportions
+### Checking data proportions
 
 ```{r}
+#| label: tbl-proportions
+#| tbl-cap: "The proportions of Species 1: Serenoa Repens and Species 2: Sabal Etonia are represented in this table"
+
 palmetto_df %>%
   group_by(species) %>%
   summarize(n = n()) %>%
   ungroup() %>%
-  mutate(prop = n / sum(n))
+  mutate(prop = n / sum(n)) %>% 
+  kbl() %>% 
+  kable_classic()
+  
 
 ## The proportion of both the species in the dataset are almost equal at 50% each
 
 ```
 
-## Splitting the species data for testing and training
+Both species have almost equal proportion and thus, there will not be any need for stratfication of data for testing and training the model. We can directly proceed to Cross Validation.
+
+## Binary Logistic Regression Model: Cross Validation
+
+### Data Folding 
 
 ```{r}
-set.seed(35)
-
-species_split <- initial_split(palmetto_df, prop = 0.80, strata = NULL)
-species_train_df <- training(species_split)
-species_test_df <- testing(species_split)
-```
-
-## Setting up Binary Logistic Regression Models: TidyModels
-
-```{r}
-blr_mdl <- logistic_reg() %>%
-  set_engine('glm') ## GLM engine setup for the regression
-
-## Testing model 1 for fit
-model1_fit <- blr_mdl %>%
-  fit(formula = f1, data = species_train_df)
-
-## Testing the second model for fit
-model2_fit <- blr_mdl %>%
-  fit(formula = f2, data = species_train_df)
-
-model1_fit
-model2_fit
-```
-
-```{r}
-species_test1_predict <- species_test_df %>%
-  mutate(predict(model1_fit, new_data = species_test_df, type = 'prob'))
-
-species_test2_predict <- species_test_df %>%
-  mutate(predict(model2_fit, new_data = species_test_df, type = 'prob'))
-
-
-
-```
-
-Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check. Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the tidymodels package to automate this, or manually perform the analysis using for-loops or purrr functions).
-
-```{r}
-set.seed(1567)
-species_train_folds <- vfold_cv(species_train_df, v = 10, repeats = 10)
-species_train_folds
+set.seed(12321)
+palmetto_folds <- vfold_cv(palmetto_df, v = 10, repeats = 10)
 ```
 
 ```{r}
 
-species_model1_wf <- workflow() %>%   
-  add_model(blr_mdl) %>%
-  add_formula(species ~ green_lvs + height + width + length)
-  
+## Setting up the model 
+blr_mdl <- logistic_reg() %>% 
+  set_engine('glm')
 
-species_model2_wf <- workflow() %>%   
-  add_model(blr_mdl) %>%
-  add_formula(species ~ green_lvs + height + width)
+# Creating workflows for Model 1 and 2
+blr_wf1 <- workflow() %>% 
+  add_model(blr_mdl) %>% 
+  add_formula(f1) 
 
+blr_wf2 <- workflow() %>% 
+  add_model(blr_mdl) %>% 
+  add_formula(f2)
+
+# Implementing workflow on the folded dataset
+model1_fit_folds <- blr_wf1 %>% 
+  fit_resamples(palmetto_folds)
+model2_fit_folds <- blr_wf2 %>% 
+  fit_resamples(palmetto_folds)
 ```
 
-## Model 1 performs better
-
-Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values and/or area under ROC curve as well to support your decision.
+### Collecting model metrics
 
 ```{r}
-model1_fit_folds <- species_model1_wf %>%
-  fit_resamples(species_train_folds)
+#| label: tbl-metrics
+#| tbl-cap: "The metrics for predictive performance of both the models are represented in the table. The results for the accuracy and area under the ROC curve are presented for both Model 1 (A) and Model 2 (B)"
+#| tbl-subcap: 
+#|      - "A. Model 1"
+#|      - "B. Model 2"
+#| layout-nrow: 2
+#| layout-align: center
 
-model2_fit_folds <- species_model2_wf %>%
-  fit_resamples(species_train_folds)
-
-model1_fit_folds
-model2_fit_folds
 
 ### Average the predictive performance of the ten models:
-collect_metrics(model1_fit_folds)
-collect_metrics(model2_fit_folds)
+collect_metrics(model1_fit_folds) %>% 
+  select(-.config) %>% 
+  rename(metric = .metric,
+         estimator = .estimator,
+         standard_error = std_err) %>% 
+  kbl() %>% kable_classic()
+
+collect_metrics(model2_fit_folds) %>% 
+  select(-.config) %>% 
+  rename(metric = .metric,
+         estimator = .estimator,
+         standard_error = std_err) %>% 
+  kbl() %>% kable_classic()
+```
+### Performance Outcomes
+
+Although Model 1 emerges as the preferred choice based on both the ROC curve and accuracy, Model 2 has great performance metrics too. After analyzing the results from cross-validation, we have determined that Model 1 outperforms Model 2. Specifically, Model 1 exhibits a higher area under the receiver operating characteristic (ROC) curve compared to Model 2 (0.9725 versus 0.9635). As the area under the curve serves as a reliable metric for classification performance, this indicates that Model 1 is the superior classifier. Furthermore, Model 1 demonstrates a slightly higher accuracy rate than Model 2 (91.7% vs 89.9%). 
+
+
+### Training Performing Model 
+
+On selecting of Model 1 as the better performing model, we will be training the model on the entire dataset.
+
+```{r}
+#| label: tbl-model
+#| tbl-cap: "The results of the Model 1 as the best performing model are represented here in terms of: Coefficients values, predictor variables, standard errors and p-values."
+
+# Training Model 1 on entire dataset 
+
+model1_fit <- blr_mdl %>% 
+  fit(formula = f1, data = palmetto_df)
+
+tidy(model1_fit) %>% 
+  kbl() %>% 
+  kable_classic()
+```
+
+### Training on entire dataset
+
+Training the best performing model 1 on the entire dataset to analyze the prediction and classify the predicted vs. actual species. 
+
+```{r}
+
+## Predictions based on Model 1 fit
+species_predict <- palmetto_df %>%
+  mutate(predict(model1_fit, new_data = ., type = 'prob'))
+
+
+finalmodel_predictions <- species_predict %>% 
+  mutate(predicted_species = ifelse(.pred_1 >= .50, levels(palmetto_df$species)[1], levels(palmetto_df$species)[2])) 
+  
+
+table1 <- table(finalmodel_predictions %>% 
+        select(species, predicted_species))  
+
 ```
 
 ```{r}
-## Pending: Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and kableExtra functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+#| label: tbl-correctlyclassified
+#| tbl-cap: "Model 1 predictions correctly classified (%). For each species, the number of correct predictions and incorrect predictions are shown. Additionally, the table also show the percentage of correctly classified predictions."
 
-```
-
-```{r}
-## since model 1 performs better let's classify the predictions
-
-finalmodel_predictions <- species_test1_predict %>% 
-  mutate(predicted_species = ifelse(.pred_1 >= .50, levels(palmetto_df$species)[1], levels(palmetto_df$species)[2]))
-
-table(finalmodel_predictions %>% 
-        select(species, predicted_species))
-
-
-
-```
-
-```{r}
 library(kableExtra)
 
 conf_matrix <- table(finalmodel_predictions$species, finalmodel_predictions$predicted_species)
@@ -199,44 +293,11 @@ colnames(conf_df) <- c("Serenoa repens", "Sabal etonia", "% Correctly Classified
 
 # Print confusion matrix table with percentage using kableExtra
 kable(conf_df, "html") %>%
-  kable_styling()
+  kable_classic_2()
 
 ```
 
+## Conclusion
 
-```{r}
-library(kableExtra)
-library(broom)
+In the Model 1, the classification of species 1 (S. repens) observations was accurate approximately 91% of the time, while species 2 (S. etonia) observations were classified correctly around 93% of the time. Despite not achieving perfection, the model exhibits a remarkably high level of accuracy. Enhancements to the model's performance could be explored by identifying and incorporating additional robust predictor variables.
 
-# Get predicted values from the model
-finalmodel_predictions <- augment(final_model, newdata = species_test_df)
-
-# Calculate correct percentages
-correct_percentage <- mean(finalmodel_predictions$species == finalmodel_predictions$.fitted) * 100
-
-# Create a table with percentages using kableExtra
-table_with_percentage <- finalmodel_predictions %>%
-  select(species, .fitted) %>%
-  mutate(Correctly_Classified = ifelse(.fitted >= 0.5, "Sabal etonia", "Serenoa repens")) %>%
-  group_by(species, Correctly_Classified) %>%
-  summarise(Count = n()) %>%
-  mutate(Percentage = paste(round(Count / sum(Count) * 100, 2), "%")) %>%
-  pivot_wider(names_from = Correctly_Classified, values_from = Count) %>%
-  mutate(`% Correctly Classified` = paste0(round(correct_percentage, 2), "%")) %>%
-  select(-species)
-
-# Print confusion matrix table with percentage using kableExtra
-table_with_percentage %>%
-  kable("html") %>%
-  kable_styling()
-
-# Plot confusion matrix
-ggplot(finalmodel_predictions, aes(x = species, y = .fitted, fill = .fitted)) +
-  geom_tile() +
-  geom_text(aes(label = sprintf("%.2f%%", .fitted * 100)), vjust = 1) +
-  labs(x = "Actual Species", y = "Predicted Probability", fill = "Probability") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is \>=50% that it is species A, then it would be classified as species A). Use broom::augment() looking for the .fitted column, or predict() with type = ‘prob’, to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after. Include an overview section with subsections that briefly summarize the dataset (this should include a well formatted data citation), the purpose of your analysis, and a pseudocode outline of the steps of your analysis. Your writeup should look and feel professional in style, tone, and substance. Optional: Consider including a photo or image that is relevant to your analysis. Consider applying a Bootswatch theme to your document (theme: themename in the Quarto document header) All code, including attached packages, should be included using code-folding. Make sure to suppress any messages & warnings. Set embed-resources to be true so your HTML is self-contained!
